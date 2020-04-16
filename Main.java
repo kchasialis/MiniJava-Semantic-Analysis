@@ -22,7 +22,8 @@ class Main {
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
 
-            printDefinitions(classDefs.getDefinitions());
+            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
+            root.accept(semanticAnalyzer, null);
         }
         catch (ParseException ex) {
             System.out.println(ex.getMessage());

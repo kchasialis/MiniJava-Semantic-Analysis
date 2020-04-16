@@ -1,9 +1,7 @@
 import syntaxtree.*;
 import visitor.GJDepthFirst;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -22,27 +20,17 @@ import static java.util.Objects.requireNonNull;
  * 	- Method from parent must agree on return type and parameters
  */
 
-enum MJType {
-    BOOLEAN,
-    INT,
-    INT_ARR,
-    BOOL_ARR,
-    CUSTOM_OBJECT
-}
-
 class VariableDeclaration {
-    private final MJType type;
     private final String identifier;
-    private final String typeValue;
+    private final String type;
 
-    VariableDeclaration(MJType type, String identifier, String typeValue) {
-        this.type = type;
+    VariableDeclaration(String identifier, String type) {
         this.identifier = identifier;
-        this.typeValue = typeValue;
+        this.type = type;
     }
 
     public String getType() {
-        return this.typeValue;
+        return this.type;
     }
 
     public String getIdentifier() {
@@ -71,22 +59,22 @@ class VariableDeclaration {
 
 class ClassField extends VariableDeclaration {
 
-    ClassField(MJType type, String identifier, String typeValue) {
-        super(type, identifier, typeValue);
+    ClassField(String identifier, String type) {
+        super(identifier, type);
     }
 }
 
 class MethodParameter extends VariableDeclaration {
 
-    MethodParameter(MJType type, String identifier, String typeValue) {
-        super(type, identifier, typeValue);
+    MethodParameter(String identifier, String type) {
+        super(identifier, type);
     }
 }
 
 class MethodField extends VariableDeclaration {
 
-    MethodField(MJType type, String identifier, String typeValue) {
-        super(type, identifier, typeValue);
+    MethodField(String identifier, String type) {
+        super(identifier, type);
     }
 }
 
@@ -118,13 +106,11 @@ class ClassMethodBody {
 }
 
 class ClassMethodDeclaration {
-    private final MJType returnType;
     private final String identifier;
     private final String typeValue;
     private Set<MethodParameter> parameters;
 
-    ClassMethodDeclaration(MJType returnType, String identifier, String typeValue) {
-        this.returnType = returnType;
+    ClassMethodDeclaration(String identifier, String typeValue) {
         this.identifier = identifier;
         this.typeValue = typeValue;
         this.parameters = new HashSet<MethodParameter>();
@@ -263,30 +249,10 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
         return this.definitions;
     }
 
-    private MJType getType(String varType) {
-
-        MJType type;
-        switch(varType) {
-            case "int":
-                type = MJType.INT;
-                break;
-            case "boolean":
-                type = MJType.BOOLEAN;
-                break;
-            case "int[]":
-                type = MJType.INT_ARR;
-                break;
-            default:
-                type = MJType.CUSTOM_OBJECT;
-                break;
-        }
-        return type;
-    }
-
     private void addFieldToClassBody(String varDeclaration, ClassBody classBody) {
         String[] tokens = varDeclaration.split("::");
 
-        ClassField classField = new ClassField(getType(tokens[0]), tokens[1], tokens[0]);
+        ClassField classField = new ClassField(tokens[1], tokens[0]);
         if (!classBody.getFields().contains(classField)) {
             classBody.addField(classField);
         }
@@ -301,7 +267,7 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
         for (int i = 0 ; i < parameterList.length ; i++) {
             String[] tokens = parameterList[i].split("::");
 
-            MethodParameter methodParameter = new MethodParameter(getType(tokens[0]), tokens[1], tokens[0]);
+            MethodParameter methodParameter = new MethodParameter(tokens[1], tokens[0]);
 
             if (!classMethodDeclaration.getParameters().contains(methodParameter)) {
                 classMethodDeclaration.addToParameters(methodParameter);
@@ -315,7 +281,7 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
     private void addFieldToClassMethodBody(String varDeclaration, ClassMethodBody classMethodBody) {
         String[] tokens = varDeclaration.split("::");
 
-        MethodField methodField = new MethodField(getType(tokens[0]), tokens[1], tokens[0]);
+        MethodField methodField = new MethodField(tokens[1], tokens[0]);
         if (!classMethodBody.getFields().contains(methodField)) {
             classMethodBody.addField(methodField);
         }
@@ -323,18 +289,6 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
             throw new RuntimeException("Redeclaration of a field in method");
         }
     }
-
-    /* Note needed for now.
-    private void checkValidType(String type) {
-        MJType mjtype = getType(type);
-        if (mjtype == MJType.CUSTOM_OBJECT) {
-            ClassIdentifier classIdentifier = new ClassIdentifier(type);
-
-            if (!this.definitions.containsKey(classIdentifier)) {
-                throw new RuntimeException("Cannot find symbol " + type);
-            }
-        }
-    }*/
 
 
     /*Visit methods being here*/
@@ -397,8 +351,8 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
 
         ide = n.f11.accept(this, argu);
 
-        ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration(MJType.CUSTOM_OBJECT, "main", "void");
-        classMethodDeclaration.addToParameters(new MethodParameter(MJType.CUSTOM_OBJECT, ide, "String[]"));
+        ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration("main", "void");
+        classMethodDeclaration.addToParameters(new MethodParameter(ide, "String[]"));
 
         ClassMethodBody classMethodBody = new ClassMethodBody();
 
@@ -531,7 +485,7 @@ public class ClassDefinitions extends GJDepthFirst<String, ClassBody> {
         String type = n.f1.accept(this, argu);
         String ide = n.f2.accept(this, argu);
 
-        ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration(getType(type), ide, type);
+        ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration(ide, type);
 
         if (argu.getMethods().containsKey(classMethodDeclaration)) {
             throw new RuntimeException("Redefinition of method " + classMethodDeclaration.getIdentifier() + " in class");

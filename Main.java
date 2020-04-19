@@ -2,9 +2,11 @@ import syntaxtree.Goal;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+
+import ClassDefinitions.*;
+import SemanticAnalyzer.*;
 
 class Main {
     public static void main(String[] args) {
@@ -17,13 +19,16 @@ class Main {
             fis = new FileInputStream(args[0]);
             MiniJavaParser mjparser = new MiniJavaParser(fis);
             Goal root = mjparser.Goal();
-            System.err.println("Program passed sucessfully");
+            System.err.println("Program passed successfully");
 
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
 
+            printDefinitions(classDefs.getDefinitions());
+
             SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
             root.accept(semanticAnalyzer, null);
+            System.err.println("Semantic analysis passed successfully");
         }
         catch (ParseException ex) {
             System.out.println(ex.getMessage());
@@ -59,7 +64,7 @@ class Main {
             ClassBody body = definitions.get(classIdentifier);
 
             System.out.println("Fields of class :");
-            Set<ClassField> classFields = body.getFields();
+            Set<ClassField> classFields = body.getFields().keySet();
 
             for (ClassField field : classFields) {
                 System.out.println(field.getType() + " " + field.getIdentifier() + ";");
@@ -73,7 +78,7 @@ class Main {
             for (ClassMethodDeclaration classMethodDeclaration : classMethodDeclarations) {
                 System.out.print(classMethodDeclaration.getReturnType() + " " + classMethodDeclaration.getIdentifier() + " (");
 
-                Set<MethodParameter> methodParameters = classMethodDeclaration.getParameters();
+                Set<MethodParameter> methodParameters = classMethodDeclaration.getParameters().keySet();
                 int count = 0;
                 for (MethodParameter methodParameter : methodParameters) {
                     System.out.print(methodParameter.getType() + " " + methodParameter.getIdentifier());
@@ -87,7 +92,7 @@ class Main {
                 System.out.println();
 
                 ClassMethodBody classMethodBody = methods.get(classMethodDeclaration);
-                Set<MethodField> methodFields =  classMethodBody.getFields();
+                Set<MethodField> methodFields =  classMethodBody.getFields().keySet();
 
                 System.out.println("Fields of method : " + classMethodDeclaration.getIdentifier());
                 for (MethodField methodField : methodFields) {

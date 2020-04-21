@@ -2,24 +2,21 @@ class BinaryTree {
     public static void main(String[] a) {
     	int x;
     	int y;
+    	int[] z;
 		System.out.println(new BT().Start());
     }
 }
-
 
 // This class invokes the methods to create a tree,
 // insert, delete and serach for  elements on it
 class BT {
 
     public int Start() {
-    	BinaryTree binaryTree;
     	int x;
 		Tree root ;
 		boolean ntb ;
 		int nti ;
 
-		binaryTree = new BinaryTree();
-		x = binaryTree.maini();
 		root = new Tree();
 		ntb = root.Init(16);
 		ntb = root.Print();

@@ -188,7 +188,6 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         ide = n.f11.accept(this, argu);
 
         ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration("main", "void");
-        classMethodDeclaration.addToParameters(new MethodParameter(ide, "String[]"));
 
         ClassMethodBody classMethodBody = new ClassMethodBody();
 

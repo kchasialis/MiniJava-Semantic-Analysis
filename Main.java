@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 
 import ClassDefinitions.*;
-//import SemanticAnalyzer.*;
+import SemanticAnalyzer.*;
 
 class Main {
     public static void main(String[] args) {
@@ -24,10 +24,10 @@ class Main {
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
 
-            printDefinitions(classDefs.getDefinitions());
+            //printDefinitions(classDefs.getDefinitions());
 
-            //SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
-            //root.accept(semanticAnalyzer, null);
+            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
+            root.accept(semanticAnalyzer, null);
             System.err.println("Semantic analysis passed successfully");
         }
         catch (ParseException ex) {

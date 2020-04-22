@@ -46,10 +46,10 @@ class ObjectType {
 
     public String getType() {
         if (this.isPrimitive) {
-            return primitiveType;
+            return this.primitiveType;
         }
         else {
-            return customType.getKey();
+            return this.customType.getKey();
         }
     }
 
@@ -80,6 +80,10 @@ class ObjectType {
      * This wont work properly if the derived class is NOT the rhs object
      **/
     public boolean equals(ObjectType rhsObject) {
+
+        if (rhsObject == null) {
+            return false;
+        }
 
         if (!rhsObject.isPrimitive && !this.isPrimitive) {
             /*If both types are custom objects */
@@ -130,8 +134,21 @@ class ObjectType {
 public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
     private ClassDefinitions classDefinitions;
+    private List<String> errorMessages;
 
-    public SemanticAnalyzer(ClassDefinitions classDefinitions) { this.classDefinitions = classDefinitions; }
+    public SemanticAnalyzer(ClassDefinitions classDefinitions) {
+        this.classDefinitions = classDefinitions;
+        this.errorMessages = new ArrayList<String>();
+    }
+
+    public void printErrors() {
+        if (this.errorMessages.size() > 0) {
+            for (int i = 0; i < this.errorMessages.size(); i++) {
+                System.err.println(this.errorMessages.get(i));
+            }
+            throw new RuntimeException("Semantic analysis failed");
+        }
+    }
 
     private boolean isArray(String array) {
         if (array == null) {
@@ -161,7 +178,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             }
             return checkParents(identifier, classDefinitions.getDefinitions().get(temp).getExtendsClassName(), classDefinitions);
         }
-        throw new RuntimeException("Variable " + identifier + " is not defined");
+        return null;
     }
 
     private boolean isCustomType(String type) {
@@ -181,7 +198,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 return containsMethod(methodIdentifier, classDefinitions.getDefinitions().get(classIdentifier).getExtendsClassName(), classDefinitions);
             }
         }
-        throw new RuntimeException("Method identifier " + methodIdentifier + " was not found");
+        this.errorMessages.add("Method identifier " + methodIdentifier + " was not found");
+        return null;
     }
 
     /**
@@ -224,6 +242,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(MainClass n, Argument argu) {
         argu.performCheck = false;
         ObjectType objectType = n.f1.accept(this, argu);
+
+        if (objectType == null) {
+            return null;
+        }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(objectType.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
@@ -277,6 +299,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType objectType = n.f1.accept(this, argu);
 
+        if (objectType == null) {
+            return null;
+        }
+
         ClassIdentifier classIdentifier = new ClassIdentifier(objectType.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
 
@@ -313,6 +339,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType object = n.f1.accept(this, argu);
         ObjectType extendsObject = n.f3.accept(this, argu);
+
+        if (object == null || extendsObject == null) {
+            return null;
+        }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(object.identifier, extendsObject.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
@@ -358,6 +388,9 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType methodIdentifier = n.f2.accept(this, argu);
 
+        if (returnType == null || methodIdentifier == null) {
+            return null;
+        }
 
         argu.performCheck = true;
         argu.currentMethod = null;
@@ -385,8 +418,12 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         ObjectType expressionReturnType = n.f10.accept(this, argu);
 
+        if (expressionReturnType == null) {
+            return null;
+        }
+
         if (!returnType.equals(expressionReturnType)) {
-            throw new RuntimeException("Incompatible return type");
+            this.errorMessages.add("Incompatible return type (" + expressionReturnType.getType() + " to " + returnType.getType() + ")");
         }
 
         return null;
@@ -432,10 +469,15 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         ObjectType expressionType = n.f2.accept(this, argu);
 
+        if (identifierType == null || expressionType == null) {
+            return null;
+        }
+
         System.out.println("Entering assignment statement");
 
         if (!identifierType.equals(expressionType)) {
-            throw new RuntimeException("TypeError, incompatible types ");
+            this.errorMessages.add("TypeError, incompatible types, cannot convert " + expressionType.getType() + " to " + identifierType.getType());
+            return null;
         }
         else {
             System.out.println(identifierType.primitiveType + " = " + expressionType.primitiveType);
@@ -456,30 +498,39 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ArrayAssignmentStatement n, Argument argu) {
         ObjectType arrayType = n.f0.accept(this, argu);
 
+        if (arrayType == null) {
+            return null;
+        }
+
         System.out.println("Entering array assignment statement");
 
         if (arrayType.isPrimitive) {
             if (!isArray(arrayType.primitiveType)) {
-                throw new RuntimeException("TypeError, " + arrayType.primitiveType + " is not an array");
+                this.errorMessages.add("TypeError, " + arrayType.primitiveType + " is not an array");
+                return null;
             }
+
             ObjectType accessExpressionType = n.f2.accept(this, argu);
             ObjectType assignmentExpressionType = n.f5.accept(this, argu);
 
             if (!assignmentExpressionType.isPrimitive) {
-                throw new RuntimeException("TypeError, cannot assign " + assignmentExpressionType.getType() + " object to " + arrayType.getType());
+                this.errorMessages.add("TypeError, cannot assign " + assignmentExpressionType.getType() + " object to " + arrayType.getType());
+                return null;
             }
 
             if (!arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2).equals(assignmentExpressionType.primitiveType)) {
-                throw new RuntimeException("TypeError, cannot assign " + assignmentExpressionType.primitiveType + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
+                this.errorMessages.add("TypeError, cannot assign " + assignmentExpressionType.primitiveType + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
+                return null;
             }
             if (!accessExpressionType.equals("int")) {
-                throw new RuntimeException("TypeError, index of array access should be int");
+                this.errorMessages.add("TypeError, index of array access should be int");
+                return null;
             }
 
             System.out.println(arrayType.getType() + " [ " + accessExpressionType.getType() + " ] = " + assignmentExpressionType.getType());
         }
         else {
-            throw new RuntimeException("TypeError, " + arrayType.customType.getKey() + " is not an array");
+            this.errorMessages.add("TypeError, " + arrayType.customType.getKey() + " is not an array");
         }
 
         return null;
@@ -497,11 +548,16 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(IfStatement n, Argument argu) {
         ObjectType exprType = n.f2.accept(this, argu);
 
-        System.out.println("Entering if statement");
+        if (exprType == null) {
+            return null;
+        }
 
         if (!exprType.equals("boolean")) {
-            throw new RuntimeException("TypeError, non-boolean type on if statement");
+            this.errorMessages.add("TypeError, non-boolean type on if statement");
+            return null;
         }
+
+        System.out.println("Entering if statement");
 
         System.out.println("Expression equals " + exprType.getType());
 
@@ -521,11 +577,16 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(WhileStatement n, Argument argu) {
         ObjectType exprType = n.f2.accept(this, argu);
 
-        System.out.println("Entering while statement");
+        if (exprType == null) {
+            return null;
+        }
 
         if (!exprType.equals("boolean")) {
-            throw new RuntimeException("TypeError, non-boolean type on while statement");
+            this.errorMessages.add("TypeError, non-boolean type on while statement");
+            return null;
         }
+
+        System.out.println("Entering while statement");
 
         System.out.println("Expression equals " + exprType.getType());
 
@@ -543,6 +604,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType boolClauseLeft = n.f0.accept(this, argu);
         ObjectType boolClauseRight = n.f2.accept(this, argu);
 
+        if (boolClauseLeft == null || boolClauseRight == null) {
+            return null;
+        }
+
         System.out.println("Entering && expression");
 
         if (boolClauseLeft.equals("boolean") && boolClauseRight.equals("boolean")) {
@@ -550,7 +615,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("boolean");
         }
         else {
-            throw new RuntimeException("Invalid types on binary operator &&");
+            this.errorMessages.add("Invalid types on binary operator &&");
+            return null;
         }
     }
 
@@ -563,6 +629,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
+        if (exprType1 == null || exprType2 == null) {
+            return null;
+        }
+
         System.out.println("Entering < expression");
 
         if (exprType1.equals("int") && exprType2.equals("int")) {
@@ -570,7 +640,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("boolean");
         }
         else {
-            throw new RuntimeException("Invalid types on binary operator <");
+            this.errorMessages.add("Invalid types on binary operator <");
+            return null;
         }
     }
 
@@ -583,6 +654,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
+        if (exprType1 == null || exprType2 == null) {
+            return null;
+        }
+
         System.out.println("Entering + expression");
 
         if (exprType1.equals("int") && exprType2.equals("int")) {
@@ -590,7 +665,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            throw new RuntimeException("Invalid types on binary operator +");
+            this.errorMessages.add("Invalid types on binary operator +");
+            return null;
         }
     }
 
@@ -603,6 +679,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
+        if (exprType1 == null || exprType2 == null) {
+            return null;
+        }
+
         System.out.println("Entering - expression");
 
         if (exprType2.equals("int") && exprType2.equals("int")) {
@@ -610,7 +690,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            throw new RuntimeException("Invalid types on binary operator -");
+            this.errorMessages.add("Invalid types on binary operator -");
+            return null;
         }
     }
 
@@ -623,6 +704,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
+        if (exprType1 == null || exprType2 == null) {
+            return null;
+        }
+
         System.out.println("Entering * expression");
 
         if (exprType1.equals("int") && exprType2.equals("int")) {
@@ -630,7 +715,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            throw new RuntimeException("Invalid types on binary operator *");
+            this.errorMessages.add("Invalid types on binary operator *");
+            return null;
         }
     }
 
@@ -644,6 +730,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType arrayType = n.f0.accept(this, argu);
         ObjectType exprType = n.f2.accept(this, argu);
 
+        if (arrayType == null || exprType == null) {
+            return null;
+        }
+
         System.out.println("Entering array lookup expression");
 
         if (arrayType.isPrimitive) {
@@ -651,11 +741,13 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 System.out.println(arrayType.getType() + " [ " + exprType.getType() + " ]");
                 return new ObjectType(arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
             } else {
-                throw new RuntimeException("Invalid array lookup");
+                this.errorMessages.add("Invalid array lookup");
+                return null;
             }
         }
         else {
-            throw new RuntimeException("TypeError, " + arrayType.customType.getKey() + " is not an array");
+            this.errorMessages.add("TypeError, " + arrayType.customType.getKey() + " is not an array");
+            return null;
         }
     }
 
@@ -667,6 +759,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ArrayLength n, Argument argu) {
         ObjectType arrayType = n.f0.accept(this, argu);
 
+        if (arrayType == null) {
+            return null;
+        }
+
         System.out.println("Entering array length expression");
 
         if (arrayType.isPrimitive) {
@@ -674,11 +770,13 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 System.out.println(arrayType.getType());
                 return new ObjectType("int");
             } else {
-                throw new RuntimeException("Invalid length operator on non-array object");
+                this.errorMessages.add("Invalid length operator on non-array object");
+                return null;
             }
         }
         else {
-            throw new RuntimeException("TypeError, " + arrayType.customType.getKey() + " is not an array");
+            this.errorMessages.add("TypeError, " + arrayType.customType.getKey() + " is not an array");
+            return null;
         }
     }
 
@@ -694,8 +792,12 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = true;
         ObjectType object = n.f0.accept(this, argu);
 
+        if (object == null) {
+            return null;
+        }
+
         if (object.isPrimitive) {
-            throw new RuntimeException("TypeError, cannot perform MessageSend on primitive type");
+            this.errorMessages.add("TypeError, cannot perform MessageSend on primitive type");
         }
 
         System.out.println("Entering MessageSend expression");
@@ -703,10 +805,15 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType method = n.f2.accept(this, argu);
 
+        if (method == null) {
+            return null;
+        }
+
         ClassMethodDeclaration classMethodDeclaration = containsMethod(method.identifier, argu.currentClass.getKey().getClassName(), classDefinitions);
 
         if (classMethodDeclaration == null) {
-            throw new RuntimeException("Cannot find symbol " + method.identifier);
+            this.errorMessages.add("Cannot find symbol " + method.identifier);
+            return null;
         }
 
         argu.parameters = null;
@@ -718,7 +825,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             argu.parameters = null;
         }
 
-        String returnType =  classMethodDeclaration.getReturnType();
+        String returnType = classMethodDeclaration.getReturnType();
         if (isCustomType(returnType)) {
             System.out.println("Returning " + ObjectType.createCustomObject(returnType , classDefinitions).getType() + " from MessageSend");
             return ObjectType.createCustomObject(returnType , classDefinitions);
@@ -740,11 +847,16 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ExpressionList n, Argument argu) {
         ObjectType objectType = n.f0.accept(this, argu);
 
+        if (objectType == null) {
+            return null;
+        }
+
         System.out.println("Entering expression list");
         System.out.print(objectType.getType() + ", ");
 
         if (!objectType.equals(argu.parameters.get(argu.currentParameter))) {
-            throw new RuntimeException("Incompatible types on ExpressionList");
+            this.errorMessages.add("Incompatible types on ExpressionList");
+            return null;
         }
         argu.currentParameter++;
 
@@ -774,9 +886,13 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         ObjectType objectType = n.f1.accept(this, argu);
 
+        if (objectType == null) {
+            return null;
+        }
+
         System.out.print(objectType.getType() + ", ");
         if (!objectType.equals(argu.parameters.get(argu.currentParameter))) {
-            throw new RuntimeException("Incompatible types on ExpressionList");
+            this.errorMessages.add("Incompatible types on ExpressionList");
         }
         argu.currentParameter++;
 
@@ -816,12 +932,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     /**
      * f0 -> "boolean"
      */
-    public ObjectType visit(BooleanType n, Argument argu) {
-        ObjectType objectType = new ObjectType("boolean");
-        objectType.isPrimitive = true;
-        return objectType;
-    }
-
+    public ObjectType visit(BooleanType n, Argument argu) { return new ObjectType("boolean"); }
     /**
      * f0 -> "int"
      */
@@ -842,8 +953,14 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
      */
     public ObjectType visit(BooleanArrayAllocationExpression n, Argument argu) {
         ObjectType exprType = n.f3.accept(this, argu);
+
+        if (exprType == null) {
+            return null;
+        }
+
         if (!exprType.equals("int")) {
-            throw new RuntimeException("TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
+            this.errorMessages.add("TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
+            return null;
         }
 
         return new ObjectType("boolean[]");
@@ -858,8 +975,14 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
      */
     public ObjectType visit(IntegerArrayAllocationExpression n, Argument argu) {
         ObjectType exprType = n.f3.accept(this, argu);
+
+        if (exprType == null) {
+            return null;
+        }
+
         if (!exprType.equals("int")) {
-            throw new RuntimeException("TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
+            this.errorMessages.add("TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
+            return null;
         }
 
         return new ObjectType("int[]");
@@ -877,6 +1000,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType ide = n.f1.accept(this, argu);
         argu.performCheck = tmp;
 
+        if (ide == null) {
+            return null;
+        }
+
         return ObjectType.createCustomObject(ide.identifier , classDefinitions);
     }
 
@@ -887,11 +1014,16 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(NotExpression n, Argument argu) {
         ObjectType clause = n.f1.accept(this, argu);
 
+        if (clause == null) {
+            return null;
+        }
+
         if (clause.equals("boolean")) {
             return clause;
         }
         else {
-            throw new RuntimeException("Invalid clause on !");
+            this.errorMessages.add("Invalid clause on !");
+            return null;
         }
     }
 
@@ -915,7 +1047,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
          */
         if (argu.currentMethod == null) {
             if (!classDefinitions.getDefinitions().containsKey(new ClassIdentifier(objectType.identifier))) {
-                throw new RuntimeException("Symbol " + objectType.identifier + " is not defined");
+                this.errorMessages.add("Symbol " + objectType.identifier + " is not defined");
+                return null;
             } else {
                 return objectType;
             }
@@ -941,12 +1074,16 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                     type = checkCurrentClass(objectType.identifier, argu);
                     if (type == null) {
                         type = checkParents(objectType.identifier, argu.currentClass.getKey().getExtendsClassName(), classDefinitions);
+                        if (type == null) {
+                            return null;
+                        }
                     }
                 }
                 else {
                     type = checkCurrentClass(objectType.identifier, argu);
                     if (type == null) {
-                        throw new RuntimeException("Variable " + objectType.identifier + " is not defined");
+                        this.errorMessages.add("Variable " + objectType.identifier + " is not defined");
+                        return null;
                     }
                 }
             }

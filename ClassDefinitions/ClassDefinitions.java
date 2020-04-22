@@ -185,8 +185,6 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             throw new RuntimeException("Redefinitions of main class / method");
         }
 
-        ide = n.f11.accept(this, argu);
-
         ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration("main", "void");
 
         ClassMethodBody classMethodBody = new ClassMethodBody();

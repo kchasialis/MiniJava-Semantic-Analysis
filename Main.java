@@ -19,7 +19,7 @@ class Main {
             fis = new FileInputStream(args[0]);
             MiniJavaParser mjparser = new MiniJavaParser(fis);
             Goal root = mjparser.Goal();
-            System.err.println("Program passed successfully");
+            System.err.println("Program parsed successfully");
 
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
@@ -28,6 +28,7 @@ class Main {
 
             SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
             root.accept(semanticAnalyzer, null);
+            semanticAnalyzer.printErrors();
             System.err.println("Semantic analysis passed successfully");
         }
         catch (ParseException ex) {

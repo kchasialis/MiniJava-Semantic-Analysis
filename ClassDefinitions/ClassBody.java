@@ -19,6 +19,8 @@ public class ClassBody {
     }
 
     ClassBody(String extendsClassName) {
+        this.methods = new HashMap<ClassMethodDeclaration, ClassMethodBody>();
+        this.fields = new HashMap<ClassField, ClassField>();
         this.extendsClassName = Optional.of(requireNonNull(extendsClassName, "Extends Class Name should be not null"));
     }
 

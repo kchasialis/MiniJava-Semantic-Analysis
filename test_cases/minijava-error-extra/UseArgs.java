@@ -6,3 +6,11 @@ class UseArgs {
     }
 
 }
+
+class A {
+
+}
+
+class A {
+	
+}

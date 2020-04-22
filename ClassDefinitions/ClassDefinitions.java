@@ -28,10 +28,18 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
 
     /*Class identifier and body*/
     private Map<ClassIdentifier, ClassBody> definitions;
+    private List<String> errorMessages;
+    private int currentLine;
+    private int currentColumn;
 
     public ClassDefinitions() {
+        this.errorMessages = new ArrayList<String>();
         this.definitions = new HashMap<ClassIdentifier, ClassBody>();
+        this.currentLine = 1;
+        this.currentColumn = 1;
     }
+
+    public List<String> getErrorMessages() { return this.errorMessages; }
 
     public Map<ClassIdentifier, ClassBody> getDefinitions() {
         return this.definitions;
@@ -45,7 +53,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             classBody.addField(classField);
         }
         else {
-            throw new RuntimeException("Redeclaration of a variable in class");
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redeclaration of a variable in class");
         }
     }
 
@@ -58,7 +66,17 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
                 lhsParameters.addAll(lhs.getParameters().keySet());
                 rhsParameters.addAll(rhs.getParameters().keySet());
 
-                return lhsParameters.equals(rhsParameters);
+               if (lhsParameters.size() != rhsParameters.size()) {
+                   return false;
+               }
+
+               for (int i = 0 ; i < lhsParameters.size() ; i++) {
+                   if (!lhsParameters.get(i).getType().equals(rhsParameters.get(i).getType())) {
+                       return false;
+                   }
+               }
+
+               return true;
             }
             else {
                 return false;
@@ -69,31 +87,38 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         }
     }
 
-    private void addMethodToClassBody(ClassMethodDeclaration classMethodDeclaration, ClassMethodBody classMethodBody, Argument argu) {
-        if (argu.currentClass.getKey().getExtendsClassName() != null) {
-            ClassIdentifier temp = new ClassIdentifier(argu.currentClass.getKey().getExtendsClassName());
+    private boolean identicalMethodExists(String currentClass, ClassMethodDeclaration classMethodDeclaration) {
+        if (currentClass != null) {
+            ClassIdentifier temp = new ClassIdentifier(currentClass);
 
-            if (definitions.get(temp).getMethods().containsKey(new ClassMethodDeclaration(classMethodDeclaration.getIdentifier(), null))) {
-                Set<ClassMethodDeclaration> parentDeclarations = definitions.get(temp).getMethods().keySet();
-                boolean foundIdentical = false;
+            Set<ClassMethodDeclaration> parentDeclarations = definitions.get(temp).getMethods().keySet();
 
+            if (parentDeclarations.contains(classMethodDeclaration)) {
                 for (ClassMethodDeclaration parentDeclaration : parentDeclarations) {
                     boolean identical = isIdentical(classMethodDeclaration, parentDeclaration);
                     if (identical) {
-                        foundIdentical = true;
-                        break;
+                        return true;
                     }
-                }
-
-                if (foundIdentical) {
-                    argu.currentClass.getValue().addMethod(classMethodDeclaration, classMethodBody);
-                }
-                else {
-                    throw new RuntimeException("Method " + classMethodDeclaration.getIdentifier() + " is also defined in superclass with different type / parameters");
                 }
             }
             else {
+                return true;
+            }
+
+            return identicalMethodExists(this.definitions.get(temp).getExtendsClassName(), classMethodDeclaration);
+        }
+
+        return false;
+    }
+
+    private void addMethodToClassBody(ClassMethodDeclaration classMethodDeclaration, ClassMethodBody classMethodBody, Argument argu) {
+        if (argu.currentClass.getKey().getExtendsClassName() != null) {
+
+            if (identicalMethodExists(argu.currentClass.getKey().getExtendsClassName(), classMethodDeclaration)) {
                 argu.currentClass.getValue().addMethod(classMethodDeclaration, classMethodBody);
+            }
+            else {
+                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Method " + classMethodDeclaration.getIdentifier() + " is also defined in a superclass with different type / parameters");
             }
         }
         else {
@@ -113,7 +138,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
                 classMethodDeclaration.addToParameters(methodParameter);
             }
             else {
-                throw new RuntimeException("Redeclaration of a parameter in method " + classMethodDeclaration.getIdentifier());
+                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redeclaration of a parameter in method " + classMethodDeclaration.getIdentifier());
             }
         }
     }
@@ -126,10 +151,12 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             classMethodBody.addField(methodField);
         }
         else {
-            throw new RuntimeException("Redeclaration of a local variable in method " + classMethodDeclaration.getIdentifier());
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redeclaration of a local variable in method " + classMethodDeclaration.getIdentifier());
         }
     }
 
+
+    public String visit(NodeToken n, Argument argu) { return n.toString(); }
 
     /**
      * f0 -> MainClass()
@@ -168,9 +195,10 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f17 -> "}"
      */
     public String visit(MainClass n, Argument argu) {
-        String _ret = null;
-
         argu = new Argument();
+
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
 
         String ide = n.f1.accept(this, argu);
 
@@ -182,7 +210,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             definitions.put(classIdentifier, mainClassBody);
         }
         else {
-            throw new RuntimeException("Redefinitions of main class / method");
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinitions of main class / method");
+            return null;
         }
 
         ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration("main", "void");
@@ -199,7 +228,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         /*After finishing processing the entire method body, add method to our class methods*/
         addMethodToClassBody(classMethodDeclaration, classMethodBody, argu);
 
-        return _ret;
+        return null;
     }
 
     /**
@@ -229,7 +258,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             definitions.put(classIdentifier, classBody);
         }
         else {
-            throw new RuntimeException("Redefinition of " + classIdentifier.getClassName());
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinition of " + classIdentifier.getClassName());
+            return null;
         }
 
         argu.currentClass = new SimpleEntry<ClassIdentifier, ClassBody>(classIdentifier, classBody);
@@ -261,8 +291,9 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         String ide = n.f1.accept(this, argu);
         String extendsIde = n.f3.accept(this, argu);
 
-        if (!definitions.containsKey(new ClassIdentifier(extendsIde, null))) {
-            throw new RuntimeException("Cannot find extends symbol " + extendsIde);
+        if (!definitions.containsKey(new ClassIdentifier(extendsIde))) {
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Cannot find extends symbol " + extendsIde);
+            return null;
         }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(ide, extendsIde);
@@ -272,7 +303,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             definitions.put(classIdentifier, classBody);
         }
         else {
-            throw new RuntimeException("Redefinition of " + classIdentifier.getClassName() + classIdentifier.getExtendsClassName());
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinition of " + classIdentifier.getClassName() + classIdentifier.getExtendsClassName());
+            return null;
         }
 
         argu.currentClass = new SimpleEntry<ClassIdentifier, ClassBody>(classIdentifier, classBody);
@@ -328,7 +360,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         ClassMethodDeclaration classMethodDeclaration = new ClassMethodDeclaration(ide, type);
 
         if (argu.currentClass.getValue().getMethods().containsKey(classMethodDeclaration)) {
-            throw new RuntimeException("Redefinition of method " + classMethodDeclaration.getIdentifier() + " in class " + argu.currentClass.getKey().getClassName());
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinition of method " + classMethodDeclaration.getIdentifier() + " in class " + argu.currentClass.getKey().getClassName());
+            return null;
         }
 
         ClassMethodBody classMethodBody = new ClassMethodBody();
@@ -385,13 +418,12 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f0 -> ( FormalParameterTerm() )*
      */
     public String visit(FormalParameterTail n, Argument argu) {
-        String retval = null;
-
-        if (n.f0.size() == 1) {
-            return n.f0.elementAt(0).accept(this, argu);
+        if (n.f0.size() == 0) {
+            return null;
         }
 
-        for (int i = 0 ; i < n.f0.size() ; i++) {
+        String retval = n.f0.elementAt(0).accept(this, argu);
+        for (int i = 1 ; i < n.f0.size() ; i++) {
             retval += n.f0.elementAt(i).accept(this, argu);
         }
 
@@ -405,6 +437,9 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
     public String visit(FormalParameterTerm n, Argument argu) {
         String retval;
 
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
+
         retval = n.f0.accept(this, argu);
         retval += n.f1.accept(this, argu);
 
@@ -417,17 +452,13 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      *       | IntegerType()
      *       | Identifier()
      */
-    public String visit(Type n, Argument argu) {
-        return n.f0.accept(this, argu);
-    }
+    public String visit(Type n, Argument argu) { return n.f0.accept(this, argu); }
 
     /**
      * f0 -> BooleanArrayType()
      *       | IntegerArrayType()
      */
-    public String visit(ArrayType n, Argument argu) {
-        return n.f0.accept(this, argu);
-    }
+    public String visit(ArrayType n, Argument argu) { return n.f0.accept(this, argu); }
 
     /**
      * f0 -> "boolean"
@@ -435,6 +466,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f2 -> "]"
      */
     public String visit(BooleanArrayType n, Argument argu) {
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
         return "boolean[]";
     }
 
@@ -444,6 +477,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f2 -> "]"
      */
     public String visit(IntegerArrayType n, Argument argu) {
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
         return "int[]";
     }
 
@@ -451,6 +486,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f0 -> "boolean"
      */
     public String visit(BooleanType n, Argument argu) {
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
         return "boolean";
     }
 
@@ -458,6 +495,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f0 -> "int"
      */
     public String visit(IntegerType n, Argument argu) {
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
         return "int";
     }
 
@@ -465,6 +504,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f0 -> <IDENTIFIER>
      */
     public String visit(Identifier n, Argument argu) {
+        this.currentLine = n.f0.beginLine;
+        this.currentColumn = n.f0.beginColumn;
         return n.f0.toString();
     }
 }

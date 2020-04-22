@@ -24,9 +24,7 @@ class Main {
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
 
-            //printDefinitions(classDefs.getDefinitions());
-
-            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs);
+            SemanticAnalyzer semanticAnalyzer = new SemanticAnalyzer(classDefs, classDefs.getErrorMessages());
             root.accept(semanticAnalyzer, null);
             semanticAnalyzer.printErrors();
             System.err.println("Semantic analysis passed successfully");

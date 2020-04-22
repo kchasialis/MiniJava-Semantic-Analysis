@@ -1,6 +1,6 @@
 package ClassDefinitions;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ClassMethodDeclaration {
@@ -13,7 +13,7 @@ public class ClassMethodDeclaration {
     public ClassMethodDeclaration(String identifier, String typeValue) {
         this.identifier = identifier;
         this.typeValue = typeValue;
-        this.parameters = new HashMap<MethodParameter, MethodParameter>();
+        this.parameters = new LinkedHashMap<MethodParameter, MethodParameter>();
     }
 
     public String getReturnType() {

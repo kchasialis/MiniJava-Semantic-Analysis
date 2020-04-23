@@ -34,9 +34,84 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
 
     public ClassDefinitions() {
         this.errorMessages = new ArrayList<String>();
-        this.definitions = new HashMap<ClassIdentifier, ClassBody>();
+        this.definitions = new LinkedHashMap<ClassIdentifier, ClassBody>();
         this.currentLine = 1;
         this.currentColumn = 1;
+    }
+
+    public void printOffsets() {
+        Iterator<Map.Entry<ClassIdentifier, ClassBody>> iterator = definitions.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<ClassIdentifier, ClassBody> value = iterator.next();
+
+            List<SimpleEntry<ClassField, Integer>> fieldOffsets = value.getValue().getFieldOffsets();
+            for (int i = 0 ; i < fieldOffsets.size() ; i++) {
+                System.out.println(value.getKey().getClassName() + "." + fieldOffsets.get(i).getKey().getIdentifier() + " = " + fieldOffsets.get(i).getValue());
+            }
+
+            List<SimpleEntry<String, Integer>> methodOffsets = value.getValue().getMethodOffsets();
+            for (int i = 0 ; i < methodOffsets.size() ; i++) {
+                System.out.println(value.getKey().getClassName() + "." + methodOffsets.get(i).getKey() + " = " + methodOffsets.get(i).getValue());
+            }
+        }
+    }
+
+    /**
+     * Printing definitions, for debugging purposes
+     */
+    public void printDefinitions() {
+        Set<ClassIdentifier> classIdentifiers = definitions.keySet();
+
+        for (ClassIdentifier classIdentifier : classIdentifiers) {
+            String extendsName = classIdentifier.getExtendsClassName();
+            if (extendsName != null) {
+                System.out.println("Class + " + classIdentifier.getClassName() + " extends " + extendsName);
+            }
+            else {
+                System.out.println("Class " + classIdentifier.getClassName());
+
+            }
+
+            ClassBody body = definitions.get(classIdentifier);
+
+            System.out.println("Fields of class :");
+            Set<ClassField> classFields = body.getFields().keySet();
+
+            for (ClassField field : classFields) {
+                System.out.println(field.getType() + " " + field.getIdentifier() + ";");
+            }
+
+            System.out.println("Methods of class :");
+
+            Map<ClassMethodDeclaration, ClassMethodBody> methods = body.getMethods();
+            Set<ClassMethodDeclaration> classMethodDeclarations = methods.keySet();
+
+            for (ClassMethodDeclaration classMethodDeclaration : classMethodDeclarations) {
+                System.out.print(classMethodDeclaration.getReturnType() + " " + classMethodDeclaration.getIdentifier() + " (");
+
+                Set<MethodParameter> methodParameters = classMethodDeclaration.getParameters().keySet();
+                int count = 0;
+                for (MethodParameter methodParameter : methodParameters) {
+                    System.out.print(methodParameter.getType() + " " + methodParameter.getIdentifier());
+                    count++;
+                    if (count != methodParameters.size()) {
+                        System.out.print(", ");
+                    }
+                }
+                System.out.print(")");
+
+                System.out.println();
+
+                ClassMethodBody classMethodBody = methods.get(classMethodDeclaration);
+                Set<MethodField> methodFields =  classMethodBody.getFields().keySet();
+
+                System.out.println("Fields of method : " + classMethodDeclaration.getIdentifier());
+                for (MethodField methodField : methodFields) {
+                    System.out.println(methodField.getType() + " " + methodField.getIdentifier() + ";");
+                }
+            }
+            System.out.println("\n");
+        }
     }
 
     public List<String> getErrorMessages() { return this.errorMessages; }
@@ -50,6 +125,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
 
         ClassField classField = new ClassField(tokens[1], tokens[0]);
         if (!classBody.getFields().containsKey(classField)) {
+            classBody.addFieldOffset(classField);
             classBody.addField(classField);
         }
         else {
@@ -87,7 +163,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         }
     }
 
-    private boolean identicalMethodExists(String currentClass, ClassMethodDeclaration classMethodDeclaration) {
+    private int identicalMethodExists(String currentClass, ClassMethodDeclaration classMethodDeclaration) {
         if (currentClass != null) {
             ClassIdentifier temp = new ClassIdentifier(currentClass);
 
@@ -97,25 +173,33 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
                 for (ClassMethodDeclaration parentDeclaration : parentDeclarations) {
                     boolean identical = isIdentical(classMethodDeclaration, parentDeclaration);
                     if (identical) {
-                        return true;
+                        //code 1 means that the method exists and is indeed identical
+                        return 1;
                     }
                 }
             }
             else {
-                return true;
+                //code 2 means that the method does not exist on any superclass, so we are free to add it
+                return 2;
             }
 
             return identicalMethodExists(this.definitions.get(temp).getExtendsClassName(), classMethodDeclaration);
         }
 
-        return false;
+        //code 0 means that the method exists and is not identical
+        return 0;
     }
 
     private void addMethodToClassBody(ClassMethodDeclaration classMethodDeclaration, ClassMethodBody classMethodBody, Argument argu) {
         if (argu.currentClass.getKey().getExtendsClassName() != null) {
+            int code = identicalMethodExists(argu.currentClass.getKey().getExtendsClassName(), classMethodDeclaration);
 
-            if (identicalMethodExists(argu.currentClass.getKey().getExtendsClassName(), classMethodDeclaration)) {
+            if (code == 1) {
                 argu.currentClass.getValue().addMethod(classMethodDeclaration, classMethodBody);
+            }
+            else if (code == 2) {
+                argu.currentClass.getValue().addMethod(classMethodDeclaration, classMethodBody);
+                argu.currentClass.getValue().addMethodOffset(classMethodDeclaration);
             }
             else {
                 errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Method " + classMethodDeclaration.getIdentifier() + " is also defined in a superclass with different type / parameters");
@@ -123,6 +207,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         }
         else {
             argu.currentClass.getValue().addMethod(classMethodDeclaration, classMethodBody);
+            argu.currentClass.getValue().addMethodOffset(classMethodDeclaration);
         }
     }
 
@@ -269,6 +354,8 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             addFieldToClassBody(varDeclaration, argu.currentClass.getValue());
         }
 
+
+
         /*Accept all method declarations */
         for (int i = 0 ; i < n.f4.size() ; i++) {
             n.f4.elementAt(i).accept(this, argu);
@@ -297,7 +384,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(ide, extendsIde);
-        ClassBody classBody = new ClassBody(extendsIde);
+        ClassBody classBody = new ClassBody(extendsIde, this);
 
         if (!definitions.containsKey(classIdentifier)) {
             definitions.put(classIdentifier, classBody);
@@ -329,8 +416,6 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
      * f2 -> ";"
      */
     public String visit(VarDeclaration n, Argument argu) {
-        String _ret = null;
-
         String type = n.f0.accept(this, argu);
 
         String ide = n.f1.accept(this, argu);

@@ -22,8 +22,9 @@ import java.util.AbstractMap.SimpleEntry;
 class Argument {
     public SimpleEntry<ClassMethodDeclaration, ClassMethodBody> currentMethod;
     public SimpleEntry<ClassIdentifier, ClassBody> currentClass;
+    public Map<MethodParameter, MethodParameter> currentParameters;
+    public Iterator<Map.Entry<MethodParameter, MethodParameter>> currentIterator;
     public int currentParameter;
-    public List<MethodParameter> parameters;
     public boolean performCheck; //Let identifier know that it should not do anything for type check, just accept
 }
 
@@ -146,9 +147,9 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public void printErrors() {
         if (this.errorMessages.size() > 0) {
             for (int i = 0; i < this.errorMessages.size(); i++) {
-                System.err.println(this.errorMessages.get(i));
+                System.out.println(this.errorMessages.get(i));
             }
-            System.err.println("Semantic analysis failed");
+            System.out.println("Semantic analysis failed");
             System.exit(1);
         }
     }
@@ -871,21 +872,28 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
           This means that is we call this function recursively it will set different parameters every time
           We use this tmp variable to keep our parameters from the previous call and restore them before returning
          */
-        List<MethodParameter> tempParameters = argu.parameters;
+        Map<MethodParameter, MethodParameter> tempParameters = argu.currentParameters;
+        Iterator<Map.Entry<MethodParameter, MethodParameter>> tempIterator = argu.currentIterator;
         int tempCurrentParameter = argu.currentParameter;
 
-        argu.parameters = null;
+        argu.currentParameters = null;
+        argu.currentIterator = null;
 
         if (n.f4.present()) {
             argu.currentParameter = 0;
-            argu.parameters = new ArrayList<MethodParameter>(classMethodDeclaration.getParameters().keySet());
+            argu.currentIterator = classMethodDeclaration.getParameters().entrySet().iterator();
+            argu.currentParameters = classMethodDeclaration.getParameters();
+
             n.f4.accept(this, argu);
-            argu.parameters = null;
+
+            argu.currentParameters = null;
+            argu.currentIterator = null;
         }
 
         String returnType =  classMethodDeclaration.getReturnType();
         if (isCustomType(returnType)) {
-            argu.parameters = tempParameters;
+            argu.currentParameters = tempParameters;
+            argu.currentIterator = tempIterator;
             argu.currentParameter = tempCurrentParameter;
             return ObjectType.createCustomObject(returnType , classDefinitions);
         }
@@ -895,7 +903,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         objectType.isPrimitive = true;
         objectType.primitiveType = returnType;
 
-        argu.parameters = tempParameters;
+        argu.currentParameters = tempParameters;
+        argu.currentIterator = tempIterator;
         argu.currentParameter = tempCurrentParameter;
 
         return objectType;
@@ -912,16 +921,19 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return null;
         }
 
-        if (!objectType.equals(argu.parameters.get(argu.currentParameter))) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + argu.parameters.get(argu.currentParameter).getType() + " on expression list");
-            return null;
+        if (argu.currentIterator.hasNext()) {
+            Map.Entry<MethodParameter, MethodParameter> currentEntry = argu.currentIterator.next();
+            if (!objectType.equals(currentEntry.getKey())) {
+                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
+                return null;
+            }
+            argu.currentParameter++;
         }
-        argu.currentParameter++;
 
         n.f1.accept(this, argu);
 
-        if (argu.currentParameter != argu.parameters.size()) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid method call, the number of arguments given (" + argu.currentParameter + ") is less than expected (" + argu.parameters.size() + ")");
+        if (argu.currentParameter != argu.currentParameters.size()) {
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid method call, the number of arguments given (" + argu.currentParameter + ") is less than expected (" + argu.currentParameters.size() + ")");
             return null;
         }
 
@@ -955,12 +967,14 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
-        System.out.print(objectType.getType() + ", ");
-        if (!objectType.equals(argu.parameters.get(argu.currentParameter))) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + argu.parameters.get(argu.currentParameter).getType() + " on expression list");
-            return null;
+        if (argu.currentIterator.hasNext()) {
+            Map.Entry<MethodParameter, MethodParameter> currentEntry = argu.currentIterator.next();
+            if (!objectType.equals(currentEntry.getKey())) {
+                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
+                return null;
+            }
+           argu.currentParameter++;
         }
-        argu.currentParameter++;
 
         return null;
     }
@@ -1171,35 +1185,39 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         /*Check method fields first (shadowing)*/
         String type;
-        MethodField methodField = argu.currentMethod.getValue().getFields().get(new MethodField(objectType.identifier, null));
-        if (methodField != null) {
-            type = methodField.getType();
-        } else {
-            /*Check parameters of the method*/
-            MethodParameter methodParameter = argu.currentMethod.getKey().getParameters().get(new MethodParameter(objectType.identifier, null));
-            if (methodParameter != null) {
-                type = methodParameter.getType();
-            }
-            /*Finally, check if current class or its super class contains this variable*/
-            else {
-                if (argu.currentClass.getKey().getExtendsClassName() != null) {
-                    type = checkCurrentClass(objectType.identifier, argu);
-                    if (type == null) {
-                        type = checkParents(objectType.identifier, argu.currentClass.getKey().getExtendsClassName(), classDefinitions);
+        if (argu.currentMethod.getValue() != null && argu.currentMethod.getKey() != null) {
+            MethodField methodField = argu.currentMethod.getValue().getFields().get(new MethodField(objectType.identifier, null));
+            if (methodField != null) {
+                type = methodField.getType();
+            } else {
+                /*Check parameters of the method*/
+                MethodParameter methodParameter = argu.currentMethod.getKey().getParameters().get(new MethodParameter(objectType.identifier, null));
+                if (methodParameter != null) {
+                    type = methodParameter.getType();
+                }
+                /*Finally, check if current class or its super class contains this variable*/
+                else {
+                    if (argu.currentClass.getKey().getExtendsClassName() != null) {
+                        type = checkCurrentClass(objectType.identifier, argu);
+                        if (type == null) {
+                            type = checkParents(objectType.identifier, argu.currentClass.getKey().getExtendsClassName(), classDefinitions);
+                            if (type == null) {
+                                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
+                                return null;
+                            }
+                        }
+                    } else {
+                        type = checkCurrentClass(objectType.identifier, argu);
                         if (type == null) {
                             errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
                             return null;
                         }
                     }
                 }
-                else {
-                    type = checkCurrentClass(objectType.identifier, argu);
-                    if (type == null) {
-                        errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
-                        return null;
-                    }
-                }
             }
+        }
+        else {
+            return null;
         }
 
         if (isCustomType(type)) {

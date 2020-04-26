@@ -18,7 +18,6 @@ import java.util.AbstractMap.SimpleEntry;
  * --2.2) Statements
  * --2.3) Expression
  * */
-
 class Argument {
     public SimpleEntry<ClassMethodDeclaration, ClassMethodBody> currentMethod;
     public SimpleEntry<ClassIdentifier, ClassBody> currentClass;
@@ -28,6 +27,7 @@ class Argument {
     public boolean performCheck; //Let identifier know that it should not do anything for type check, just accept
 }
 
+/*This object type represents the current type we are currently working on*/
 class ObjectType {
     public String identifier;
     public SimpleEntry<String, Set<String> > customType;
@@ -55,6 +55,13 @@ class ObjectType {
         }
     }
 
+    /**
+     * This function creates the Set of classes that our object has a 'is-a' relationship.
+     * For example.
+     * class A {} ... class B extends A {} ... class C extends B{} ...
+     * Then C is a custom type (primitiveType is null) and its Set (SimpleEntry<String, Set<String>>) representing 'is-a' relationship is the following:
+     * Set = {C, B, A};
+     */
     private static void fillCustomObject(ClassIdentifier classIdentifier, ClassDefinitions classDefinitions, ObjectType objectType) {
         String extendsIdentifier = classDefinitions.getDefinitions().get(classIdentifier).getExtendsClassName();
         if (extendsIdentifier != null) {
@@ -125,6 +132,9 @@ class ObjectType {
     }
 
     public boolean equals(String primitiveType) {
+        if (this.primitiveType == null) {
+            return false;
+        }
         return this.primitiveType.equals(primitiveType);
     }
 
@@ -133,25 +143,13 @@ class ObjectType {
 public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
     private ClassDefinitions classDefinitions;
-    private List<String> errorMessages;
     private int currentLine;
     private int currentColumn;
 
-    public SemanticAnalyzer(ClassDefinitions classDefinitions, List<String> errorMessages) {
+    public SemanticAnalyzer(ClassDefinitions classDefinitions) {
         this.classDefinitions = classDefinitions;
-        this.errorMessages = errorMessages;
         this.currentLine = 1;
         this.currentColumn = 1;
-    }
-
-    public void printErrors() {
-        if (this.errorMessages.size() > 0) {
-            for (int i = 0; i < this.errorMessages.size(); i++) {
-                System.out.println(this.errorMessages.get(i));
-            }
-            System.out.println("Semantic analysis failed");
-            System.exit(1);
-        }
     }
 
     private boolean isArray(String array) {
@@ -182,8 +180,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             }
             return checkParents(identifier, classDefinitions.getDefinitions().get(temp).getExtendsClassName(), classDefinitions);
         }
-
-        errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Variable " + identifier + " is not defined");
         return null;
     }
 
@@ -204,9 +200,9 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 return containsMethod(methodIdentifier, classDefinitions.getDefinitions().get(classIdentifier).getExtendsClassName(), classDefinitions);
             }
         }
-        errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Method identifier " + methodIdentifier + " was not found");
         return null;
     }
+
 
     /**
      * f0 -> MainClass()
@@ -248,10 +244,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(MainClass n, Argument argu) {
         argu.performCheck = false;
         ObjectType objectType = n.f1.accept(this, argu);
-
-        if (objectType == null) {
-            return null;
-        }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(objectType.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
@@ -305,10 +297,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType objectType = n.f1.accept(this, argu);
 
-        if (objectType == null) {
-            return null;
-        }
-
         ClassIdentifier classIdentifier = new ClassIdentifier(objectType.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
 
@@ -345,10 +333,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType object = n.f1.accept(this, argu);
         ObjectType extendsObject = n.f3.accept(this, argu);
-
-        if (object == null || extendsObject == null) {
-            return null;
-        }
 
         ClassIdentifier classIdentifier = new ClassIdentifier(object.identifier, extendsObject.identifier);
         ClassBody classBody = this.classDefinitions.getDefinitions().get(classIdentifier);
@@ -395,10 +379,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = false;
         ObjectType methodIdentifier = n.f2.accept(this, argu);
 
-        if (returnType == null || methodIdentifier == null) {
-            return null;
-        }
-
         argu.performCheck = true;
         if (n.f4.present()) {
             n.f4.accept(this, argu);
@@ -424,13 +404,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         ObjectType expressionReturnType = n.f10.accept(this, argu);
 
-        if (expressionReturnType == null) {
-            return null;
-        }
-
         if (!returnType.equals(expressionReturnType)) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + expressionReturnType.getType() + " to " + returnType.getType() + " on return expression");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + expressionReturnType.getType() + " to " + returnType.getType() + " on return expression");
         }
 
         return null;
@@ -478,16 +453,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType identifierType = n.f0.accept(this, argu);
         ObjectType expressionType = n.f2.accept(this, argu);
 
-        if (expressionType == null || identifierType == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
         if (!identifierType.equals(expressionType)) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, incompatible types, cannot convert " + expressionType.getType() + " to " + identifierType.getType());
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, incompatible types, cannot convert " + expressionType.getType() + " to " + identifierType.getType());
         }
 
         return null;
@@ -505,14 +475,9 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ArrayAssignmentStatement n, Argument argu) {
         ObjectType arrayType = n.f0.accept(this, argu);
 
-        if (arrayType == null) {
-            return null;
-        }
-
         if (arrayType.isPrimitive) {
             if (!isArray(arrayType.primitiveType)) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.primitiveType + " is not an array");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.primitiveType + " is not an array");
             }
 
             ObjectType accessExpressionType = n.f2.accept(this, argu);
@@ -521,28 +486,20 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             this.currentLine = n.f4.beginLine;
             this.currentColumn = n.f4.beginColumn;
 
-            if (accessExpressionType == null || assignmentExpressionType == null) {
-                return null;
-            }
-
             if (!assignmentExpressionType.isPrimitive) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot assign " + assignmentExpressionType.getType() + " object to " + arrayType.getType());
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot assign " + assignmentExpressionType.getType() + " object to " + arrayType.getType());
             }
 
             if (!arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2).equals(assignmentExpressionType.primitiveType)) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot assign " + assignmentExpressionType.primitiveType + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot assign " + assignmentExpressionType.primitiveType + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
             }
             if (!accessExpressionType.equals("int")) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, index of array access should be int");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, index of array access should be int");
             }
 
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.customType.getKey() + " is not an array");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.customType.getKey() + " is not an array");
         }
 
         return null;
@@ -560,16 +517,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(IfStatement n, Argument argu) {
         ObjectType exprType = n.f2.accept(this, argu);
 
-        if (exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (!exprType.equals("boolean")) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, non-boolean type on if statement");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, non-boolean type on if statement");
         }
 
         n.f4.accept(this, argu);
@@ -588,16 +540,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(WhileStatement n, Argument argu) {
         ObjectType exprType = n.f2.accept(this, argu);
 
-        if (exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (!exprType.equals("boolean")) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, non-boolean type on while statement");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, non-boolean type on while statement");
         }
 
         n.f4.accept(this, argu);
@@ -615,16 +562,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(PrintStatement n, Argument argu) {
         ObjectType exprType = n.f2.accept(this, argu);
 
-        if (exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (!exprType.equals(new ObjectType("int"))) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int at print statement");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int at print statement");
         }
 
         return null;
@@ -639,10 +581,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType boolClauseLeft = n.f0.accept(this, argu);
         ObjectType boolClauseRight = n.f2.accept(this, argu);
 
-        if (boolClauseLeft == null || boolClauseRight == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -650,8 +588,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("boolean");
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator && (" + boolClauseLeft.getType() + " to " + boolClauseRight.getType() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator && (" + boolClauseLeft.getType() + " and " + boolClauseRight.getType() + ")");
         }
     }
 
@@ -675,10 +612,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
-        if (exprType1 == null || exprType2 == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -686,8 +619,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("boolean");
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator < (" + exprType1.getType() + " to " + exprType2.getType() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator < (" + exprType1.getType() + " and " + exprType2.getType() + ")");
         }
     }
 
@@ -700,10 +632,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
-        if (exprType1 == null || exprType2 == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -711,8 +639,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator + (" + exprType1.getType() + " to " + exprType2.getType() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator + (" + exprType1.getType() + " and " + exprType2.getType() + ")");
         }
     }
 
@@ -725,10 +652,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
-        if (exprType1 == null || exprType2 == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -736,8 +659,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator - (" + exprType1.getType() + " to " + exprType2.getType() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator - (" + exprType1.getType() + " and " + exprType2.getType() + ")");
         }
     }
 
@@ -750,10 +672,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType exprType1 = n.f0.accept(this, argu);
         ObjectType exprType2 = n.f2.accept(this, argu);
 
-        if (exprType1 == null || exprType2 == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -761,8 +679,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             return new ObjectType("int");
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator * (" + exprType1.getType() + " to " + exprType2.getType() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid types on binary operator * (" + exprType1.getType() + " and " + exprType2.getType() + ")");
         }
     }
 
@@ -776,10 +693,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         ObjectType arrayType = n.f0.accept(this, argu);
         ObjectType exprType = n.f2.accept(this, argu);
 
-        if (arrayType == null || exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -788,17 +701,14 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 return new ObjectType(arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
             }
             else if (!isArray(arrayType.primitiveType)) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, "  + arrayType.getType() + " is not an array");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, "  + arrayType.getType() + " is not an array");
             }
             else {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, cannot convert " + exprType.getType() + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, cannot convert " + exprType.getType() + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
             }
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, " + arrayType.customType.getKey() + " is not an array");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, " + arrayType.customType.getKey() + " is not an array");
         }
     }
 
@@ -810,10 +720,6 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ArrayLength n, Argument argu) {
         ObjectType arrayType = n.f0.accept(this, argu);
 
-        if (arrayType == null) {
-            return null;
-        }
-
         this.currentLine = n.f1.beginLine;
         this.currentColumn = n.f1.beginColumn;
 
@@ -821,13 +727,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             if (isArray(arrayType.primitiveType)) {
                 return new ObjectType("int");
             } else {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid length operator on non-array object");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid length operator on non-array object");
             }
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.customType.getKey() + " is not an array");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, " + arrayType.customType.getKey() + " is not an array");
         }
     }
 
@@ -843,27 +747,17 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         argu.performCheck = true;
         ObjectType object = n.f0.accept(this, argu);
 
-        if (object == null) {
-            return null;
-        }
-
         if (object.isPrimitive) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot perform MessageSend on primitive type");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot perform MessageSend on primitive type");
         }
 
         argu.performCheck = false;
         ObjectType method = n.f2.accept(this, argu);
 
-        if (method == null) {
-            return null;
-        }
-
         ClassMethodDeclaration classMethodDeclaration = containsMethod(method.identifier, object.getType(), classDefinitions);
 
         if (classMethodDeclaration == null) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Cannot find symbol " + method.identifier);
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Cannot find symbol " + method.identifier);
         }
 
         argu.performCheck = true;
@@ -917,15 +811,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(ExpressionList n, Argument argu) {
         ObjectType objectType = n.f0.accept(this, argu);
 
-        if (objectType == null) {
-            return null;
-        }
-
         if (argu.currentIterator.hasNext()) {
             Map.Entry<MethodParameter, MethodParameter> currentEntry = argu.currentIterator.next();
             if (!objectType.equals(currentEntry.getKey())) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
             }
             argu.currentParameter++;
         }
@@ -933,8 +822,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         n.f1.accept(this, argu);
 
         if (argu.currentParameter != argu.currentParameters.size()) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid method call, the number of arguments given (" + argu.currentParameter + ") is less than expected (" + argu.currentParameters.size() + ")");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid method call, the number of arguments given (" + argu.currentParameter + ") is less than expected (" + argu.currentParameters.size() + ")");
         }
 
         return null;
@@ -960,18 +848,13 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         ObjectType objectType = n.f1.accept(this, argu);
 
-        if (objectType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (argu.currentIterator.hasNext()) {
             Map.Entry<MethodParameter, MethodParameter> currentEntry = argu.currentIterator.next();
             if (!objectType.equals(currentEntry.getKey())) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
             }
            argu.currentParameter++;
         }
@@ -1066,16 +949,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(BooleanArrayAllocationExpression n, Argument argu) {
         ObjectType exprType = n.f3.accept(this, argu);
 
-        if (exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (!exprType.equals("int")) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
         }
 
         return new ObjectType("boolean[]");
@@ -1091,16 +969,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(IntegerArrayAllocationExpression n, Argument argu) {
         ObjectType exprType = n.f3.accept(this, argu);
 
-        if (exprType == null) {
-            return null;
-        }
-
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
         if (!exprType.equals("int")) {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + exprType.getType() + " to int for array allocation");
         }
 
         return new ObjectType("int[]");
@@ -1113,14 +986,10 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
      * f3 -> ")"
      */
     public ObjectType visit(AllocationExpression n, Argument argu) {
-        boolean tmp = argu.performCheck;
-        argu.performCheck = false;
+        SimpleEntry<ClassMethodDeclaration, ClassMethodBody> tmp = argu.currentMethod;
+        argu.currentMethod = null;
         ObjectType ide = n.f1.accept(this, argu);
-        argu.performCheck = tmp;
-
-        if (ide == null) {
-            return null;
-        }
+        argu.currentMethod = tmp;
 
         return ObjectType.createCustomObject(ide.identifier , classDefinitions);
     }
@@ -1136,16 +1005,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
 
-        if (clause == null) {
-            return null;
-        }
-
         if (clause.equals("boolean")) {
             return clause;
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid clause on !");
-            return null;
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid clause on !");
         }
     }
 
@@ -1160,6 +1024,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
         this.currentColumn = n.f0.beginColumn;
 
         if (!argu.performCheck) {
+            objectType.isPrimitive = true;
             return objectType;
         }
 
@@ -1172,8 +1037,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
          */
         if (argu.currentMethod == null) {
             if (!classDefinitions.getDefinitions().containsKey(new ClassIdentifier(objectType.identifier))) {
-                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier + " (line " + n.f0.beginLine + ", column " + n.f0.beginColumn + ")");
-                return null;
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier + " (line " + n.f0.beginLine + ", column " + n.f0.beginColumn + ")");
             } else {
                 objectType.customType = new SimpleEntry<>(objectType.identifier, null);
                 return objectType;
@@ -1185,39 +1049,32 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
 
         /*Check method fields first (shadowing)*/
         String type;
-        if (argu.currentMethod.getValue() != null && argu.currentMethod.getKey() != null) {
-            MethodField methodField = argu.currentMethod.getValue().getFields().get(new MethodField(objectType.identifier, null));
-            if (methodField != null) {
-                type = methodField.getType();
-            } else {
-                /*Check parameters of the method*/
-                MethodParameter methodParameter = argu.currentMethod.getKey().getParameters().get(new MethodParameter(objectType.identifier, null));
-                if (methodParameter != null) {
-                    type = methodParameter.getType();
-                }
-                /*Finally, check if current class or its super class contains this variable*/
-                else {
-                    if (argu.currentClass.getKey().getExtendsClassName() != null) {
-                        type = checkCurrentClass(objectType.identifier, argu);
+        MethodField methodField = argu.currentMethod.getValue().getFields().get(new MethodField(objectType.identifier, null));
+        if (methodField != null) {
+            type = methodField.getType();
+        } else {
+            /*Check parameters of the method*/
+            MethodParameter methodParameter = argu.currentMethod.getKey().getParameters().get(new MethodParameter(objectType.identifier, null));
+            if (methodParameter != null) {
+                type = methodParameter.getType();
+            }
+            /*Finally, check if current class or its super class contains this variable*/
+            else {
+                if (argu.currentClass.getKey().getExtendsClassName() != null) {
+                    type = checkCurrentClass(objectType.identifier, argu);
+                    if (type == null) {
+                        type = checkParents(objectType.identifier, argu.currentClass.getKey().getExtendsClassName(), classDefinitions);
                         if (type == null) {
-                            type = checkParents(objectType.identifier, argu.currentClass.getKey().getExtendsClassName(), classDefinitions);
-                            if (type == null) {
-                                errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
-                                return null;
-                            }
+                            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
                         }
-                    } else {
-                        type = checkCurrentClass(objectType.identifier, argu);
-                        if (type == null) {
-                            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
-                            return null;
-                        }
+                    }
+                } else {
+                    type = checkCurrentClass(objectType.identifier, argu);
+                    if (type == null) {
+                        throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
                     }
                 }
             }
-        }
-        else {
-            return null;
         }
 
         if (isCustomType(type)) {

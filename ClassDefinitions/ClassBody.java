@@ -62,10 +62,14 @@ public class ClassBody {
 
     private Integer getStartingOffsetOfField(ClassBody classBody, ClassDefinitions classDefinitions) {
         if (classBody.getExtendsClassName() != null) {
-            List<SimpleEntry<ClassField, Integer>> tempFieldOffsets = classDefinitions.getDefinitions().get(new ClassIdentifier(classBody.getExtendsClassName())).fieldOffsets;
+            ClassBody baseClassBody = classDefinitions.getDefinitions().get(new ClassIdentifier(classBody.getExtendsClassName()));
+            List<SimpleEntry<ClassField, Integer>> tempFieldOffsets = baseClassBody.fieldOffsets;
             if (tempFieldOffsets.size() > 0) {
                 Integer lastFieldSize = sizeOf(tempFieldOffsets.get(tempFieldOffsets.size() - 1).getKey().getType());
                 return lastFieldSize + tempFieldOffsets.get(tempFieldOffsets.size() - 1).getValue();
+            }
+            else if (baseClassBody.getExtendsClassName() != null) {
+                return getStartingOffsetOfField(baseClassBody, classDefinitions);
             }
             else {
                 return 0;
@@ -78,9 +82,13 @@ public class ClassBody {
 
     private Integer getStartingOffsetOfMethod(ClassBody classBody, ClassDefinitions classDefinitions) {
         if (classBody.getExtendsClassName() != null) {
-            List<SimpleEntry<String, Integer>> tempMethodOffsets = classDefinitions.getDefinitions().get(new ClassIdentifier(classBody.getExtendsClassName())).methodOffsets;
+            ClassBody baseClassBody = classDefinitions.getDefinitions().get(new ClassIdentifier(classBody.getExtendsClassName()));
+            List<SimpleEntry<String, Integer>> tempMethodOffsets = baseClassBody.methodOffsets;
             if (tempMethodOffsets.size() > 0) {
                 return tempMethodOffsets.get(tempMethodOffsets.size() - 1).getValue() + 8;
+            }
+            else if (baseClassBody.getExtendsClassName() != null) {
+                return getStartingOffsetOfMethod(baseClassBody, classDefinitions);
             }
             else {
                 return 0;

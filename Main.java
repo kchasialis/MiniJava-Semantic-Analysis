@@ -20,7 +20,7 @@ class Main {
             fis = new FileInputStream(args[0]);
             MiniJavaParser mjparser = new MiniJavaParser(fis);
             Goal root = mjparser.Goal();
-            System.out.println("Program parsed successfully");
+            System.err.println("Program parsed successfully");
 
             ClassDefinitions classDefs = new ClassDefinitions();
             root.accept(classDefs, null);
@@ -68,7 +68,7 @@ class Main {
 
     public static void printErrors(List<String> errorMessages) {
         for (int i = 0; i < errorMessages.size(); i++) {
-            System.out.println(errorMessages.get(i));
+            System.err.println(errorMessages.get(i));
         }
     }
 }

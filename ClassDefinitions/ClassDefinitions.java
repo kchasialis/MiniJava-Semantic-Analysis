@@ -169,24 +169,24 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
 
             Set<ClassMethodDeclaration> parentDeclarations = definitions.get(temp).getMethods().keySet();
 
+            int retval = 0;
             if (parentDeclarations.contains(classMethodDeclaration)) {
                 for (ClassMethodDeclaration parentDeclaration : parentDeclarations) {
                     boolean identical = isIdentical(classMethodDeclaration, parentDeclaration);
                     if (identical) {
                         //code 1 means that the method exists and is indeed identical
-                        return 1;
-                    }
-                    else {
-                        return 0;
+                        retval = 1;
+                        break;
                     }
                 }
             }
             else {
                 //code 2 means that the method does not exist on any superclass, so we are free to add it
-                return 2;
+                retval = 2;
             }
 
-            return identicalMethodExists(this.definitions.get(temp).getExtendsClassName(), classMethodDeclaration);
+            return retval == 0 ? identicalMethodExists(this.definitions.get(temp).getExtendsClassName(), classMethodDeclaration) : retval;
+
         }
 
         //code 0 means that the method exists and is not identical

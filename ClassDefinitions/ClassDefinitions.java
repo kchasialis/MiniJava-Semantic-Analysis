@@ -176,6 +176,9 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
                         //code 1 means that the method exists and is indeed identical
                         return 1;
                     }
+                    else {
+                        return 0;
+                    }
                 }
             }
             else {
@@ -355,7 +358,6 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
         }
 
 
-
         /*Accept all method declarations */
         for (int i = 0 ; i < n.f4.size() ; i++) {
             n.f4.elementAt(i).accept(this, argu);
@@ -390,7 +392,7 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
             definitions.put(classIdentifier, classBody);
         }
         else {
-            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinition of " + classIdentifier.getClassName() + classIdentifier.getExtendsClassName());
+            errorMessages.add("(line " + this.currentLine + ", column " + this.currentColumn + ") Redefinition of " + classIdentifier.getClassName());
             return null;
         }
 

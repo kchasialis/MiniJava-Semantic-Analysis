@@ -816,8 +816,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             if (!objectType.equals(currentEntry.getKey())) {
                 throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
             }
-            argu.currentParameter++;
         }
+        argu.currentParameter++;
 
         n.f1.accept(this, argu);
 
@@ -1048,6 +1048,9 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
           Therefore, we should return its type to the caller, after verifying this variable was declared before.*/
 
         /*Check method fields first (shadowing)*/
+        if (argu.currentMethod.getValue() == null) {
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot find symbol " + objectType.identifier);
+        }
         String type;
         MethodField methodField = argu.currentMethod.getValue().getFields().get(new MethodField(objectType.identifier, null));
         if (methodField != null) {

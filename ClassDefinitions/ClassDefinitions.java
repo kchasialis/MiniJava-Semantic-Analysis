@@ -41,18 +41,29 @@ public class ClassDefinitions extends GJDepthFirst<String, Argument> {
 
     public void printOffsets() {
         Iterator<Map.Entry<ClassIdentifier, ClassBody>> iterator = definitions.entrySet().iterator();
+        int count = 0;
         while (iterator.hasNext()) {
+            count++;
             Map.Entry<ClassIdentifier, ClassBody> value = iterator.next();
 
+            if (count == 1) {
+                continue;
+            }
+
+            System.out.println("-----------Class " + value.getKey().getClassName() + "-----------");
+
+            System.out.println("--Variables---");
             List<SimpleEntry<ClassField, Integer>> fieldOffsets = value.getValue().getFieldOffsets();
             for (int i = 0 ; i < fieldOffsets.size() ; i++) {
                 System.out.println(value.getKey().getClassName() + "." + fieldOffsets.get(i).getKey().getIdentifier() + " = " + fieldOffsets.get(i).getValue());
             }
 
+            System.out.println("---Methods---");
             List<SimpleEntry<String, Integer>> methodOffsets = value.getValue().getMethodOffsets();
             for (int i = 0 ; i < methodOffsets.size() ; i++) {
                 System.out.println(value.getKey().getClassName() + "." + methodOffsets.get(i).getKey() + " = " + methodOffsets.get(i).getValue());
             }
+            System.out.println();
         }
     }
 

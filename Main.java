@@ -44,7 +44,7 @@ class Main {
                     System.err.println("Semantic analysis failed");
                 }
 
-                System.out.println("\nPrinting offsets\n");
+                System.out.println();
                 classDefs.printOffsets();
             } catch (ParseException ex) {
                 System.err.println(ex.getMessage());
@@ -63,7 +63,7 @@ class Main {
     }
 
     public static void printErrors(List<String> errorMessages) {
-        for (int i = 0; i < errorMessages.size(); i++) {
+        for (int i = 0 ; i < errorMessages.size(); i++) {
             System.err.println(errorMessages.get(i));
         }
     }

@@ -38,14 +38,13 @@ class Main {
 
                 if (!failed) {
                     System.err.println("Semantic analysis passed successfully");
+                    System.out.println();
+                    classDefs.printOffsets();
 
                 } else {
                     printErrors(classDefs.getErrorMessages());
                     System.err.println("Semantic analysis failed");
                 }
-
-                System.out.println();
-                classDefs.printOffsets();
             } catch (ParseException ex) {
                 System.err.println(ex.getMessage());
             } catch (FileNotFoundException ex) {

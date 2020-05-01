@@ -5,6 +5,7 @@ import visitor.GJDepthFirst;
 import ClassDefinitions.*;
 
 import java.lang.reflect.Method;
+import java.text.ParseException;
 import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
 
@@ -704,7 +705,7 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
                 throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, "  + arrayType.getType() + " is not an array");
             }
             else {
-                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, cannot convert " + exprType.getType() + " to " + arrayType.primitiveType.substring(0, arrayType.primitiveType.length() - 2));
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid array lookup, cannot convert " + exprType.getType() + " to " + "int");
             }
         }
         else {
@@ -869,6 +870,14 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
     public ObjectType visit(IntegerLiteral n, Argument argu) {
         this.currentLine = n.f0.beginLine;
         this.currentColumn = n.f0.beginColumn;
+
+        try {
+            Integer.parseInt(n.f0.toString());
+        }
+        catch(NumberFormatException e) {
+            throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") " + "Failed to parse integer");
+        }
+
         return new ObjectType("int");
     }
 

@@ -785,6 +785,11 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             argu.currentParameters = null;
             argu.currentIterator = null;
         }
+        else {
+            if (classMethodDeclaration.getParameters().size() != 0) {
+                throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") Invalid method call, the number of arguments given (" + 0 + ") is less than expected (" + classMethodDeclaration.getParameters().size() + ")");
+            }
+        }
 
         String returnType =  classMethodDeclaration.getReturnType();
         if (isCustomType(returnType)) {
@@ -858,8 +863,8 @@ public class SemanticAnalyzer extends GJDepthFirst<ObjectType, Argument> {
             if (!objectType.equals(currentEntry.getKey())) {
                 throw new RuntimeException("(line " + this.currentLine + ", column " + this.currentColumn + ") TypeError, cannot convert " + objectType.getType() + " to " + currentEntry.getKey().getType() + " on expression list");
             }
-           argu.currentParameter++;
         }
+        argu.currentParameter++;
 
         return null;
     }

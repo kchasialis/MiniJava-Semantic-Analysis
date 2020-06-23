@@ -1,5 +1,5 @@
 # MiniJava-Semantic-Analysis
-Semantic Analysis on MiniJava
+Type-Checking on MiniJava language
 
 Grammar : http://cgi.di.uoa.gr/~thp06/project_files/minijava-new-2020/minijava.html
 
